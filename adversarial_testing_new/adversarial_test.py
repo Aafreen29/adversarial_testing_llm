@@ -31,56 +31,79 @@ class AdversarialTester:
             return json.load(f)
         
     def generate_attacks(self) -> list:
-        """Generate all adversarial queries"""
-        attacks = []
-        
-        for category, queries in self.test_cases.items():
-            for query in queries[:self.config['max_queries_per_category']]:
-                variants = self._generate_variants(query, category)
-                attacks.extend(variants)
+    attacks = []
+    categories = list(self.test_cases.keys())
+    unused_queries = {category: list(queries) for category, queries in self.test_cases.items()}
+
+    while len(attacks) < self.config['max_total_queries']:
+        for category in categories:
+            if not unused_queries[category]:
+                continue
                 
-                if len(attacks) >= self.config['max_total_queries']:
-                    return attacks[:self.config['max_total_queries']]
-        
-        return attacks
-    
-    def _generate_variants(self, base_query: str, category: str) -> list:
-        """Generate variants for a single base query"""
-        variants = []
-        
-        # Template-based attacks
-        templates = ATTACK_TEMPLATES.get(category, []) + \
-                   ATTACK_TEMPLATES.get("prompt_injection", []) + \
-                   ATTACK_TEMPLATES.get("role_play", [])
-        
-        for template in random.sample(templates, min(len(templates), self.config['variants_per_template'])):
-            transformed = template.format(query=base_query)
-            variants.append(self._create_record(base_query, category, transformed, "template", template))
+            base_query = unused_queries[category].pop(0)
+            variant_type = random.choice(["template", "transformation", "combined"])
             
-        # Transformation attacks
-        transforms = random.sample(
-            TRANSFORMATION_METHODS, 
-            min(len(TRANSFORMATION_METHODS), self.config['variants_per_transformation'])
-        )
-        
-        for transform in transforms:
-            transformed = self.transformer.transform(base_query, transform)
-            variants.append(self._create_record(base_query, category, transformed, "transformation", transform))
+            if variant_type == "template":
+                template = random.choice(ATTACK_TEMPLATES.get(category, []))
+                transformed = template.format(query=base_query)
+                variant_details = template  # Template name as variant_type
+            elif variant_type == "transformation":
+                transform = random.choice(TRANSFORMATION_METHODS)
+                transformed = self.transformer.transform(base_query, transform)
+                variant_details = transform  # Transformation method as variant_type
+            else:  # combined
+                template = random.choice(ATTACK_TEMPLATES.get(category, []))
+                transform = random.choice(TRANSFORMATION_METHODS)
+                transformed = self.transformer.transform(template.format(query=base_query), transform)
+                variant_details = f"{template}+{transform}"  # Combined details
             
-        # Combined attacks
-        for _ in range(self.config['variants_combined']):
-            template = random.choice(templates)
-            transform = random.choice(TRANSFORMATION_METHODS)
-            transformed = self.transformer.transform(
-                template.format(query=base_query), 
-                transform
-            )
-            variants.append(self._create_record(
+            attacks.append(self._create_record(
                 base_query, category, transformed, 
-                "combined", f"{template}+{transform}"
+                variant_type, variant_details  # Now includes both attack_type and variant_type
             ))
             
-        return variants
+            if len(attacks) >= self.config['max_total_queries']:
+                break
+    
+    return attacks[:self.config['max_total_queries']]
+    
+    # def _generate_variants(self, base_query: str, category: str) -> list:
+    #     """Generate variants for a single base query"""
+    #     variants = []
+        
+    #     # Template-based attacks
+    #     templates = ATTACK_TEMPLATES.get(category, []) + \
+    #                ATTACK_TEMPLATES.get("prompt_injection", []) + \
+    #                ATTACK_TEMPLATES.get("role_play", [])
+        
+    #     for template in random.sample(templates, min(len(templates), self.config['variants_per_template'])):
+    #         transformed = template.format(query=base_query)
+    #         variants.append(self._create_record(base_query, category, transformed, "template", template))
+            
+    #     # Transformation attacks
+    #     transforms = random.sample(
+    #         TRANSFORMATION_METHODS, 
+    #         min(len(TRANSFORMATION_METHODS), self.config['variants_per_transformation'])
+    #     )
+        
+    #     for transform in transforms:
+    #         transformed = self.transformer.transform(base_query, transform)
+    #         variants.append(self._create_record(base_query, category, transformed, "transformation", transform))
+            
+    #     # Combined attacks
+    #     for _ in range(self.config['variants_combined']):
+    #         template = random.choice(templates)
+    #         transform = random.choice(TRANSFORMATION_METHODS)
+    #         transformed = self.transformer.transform(
+    #             template.format(query=base_query), 
+    #             transform
+    #         )
+    #         variants.append(self._create_record(
+    #             base_query, category, transformed, 
+    #             "combined", f"{template}+{transform}"
+    #         ))
+            
+    #     return variants
     
     def _create_record(self, base: str, category: str, transformed: str, 
                       attack_type: str, variant: str = "") -> dict:
