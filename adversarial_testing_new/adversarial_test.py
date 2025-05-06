@@ -29,7 +29,57 @@ class AdversarialTester:
     def _load_test_cases(self) -> dict:
         with open(Path("data") / "test_cases.json") as f:
             return json.load(f)
+
+
+    def generate_attacks(self) -> list:
+    attacks = []
+    
+    for category, base_queries in self.test_cases.items():
+        templates = ATTACK_TEMPLATES.get(category, [])
         
+        for base_query in base_queries:
+            # 1. Single random template variant
+            if templates:
+                template = random.choice(templates)
+                templated = template.format(query=base_query)
+                attacks.append(self._create_record(
+                    base=base_query,
+                    category=category,
+                    transformed=templated,
+                    attack_type="template",
+                    variant_type=template.split(":")[0].strip()
+                ))
+            
+            # 2. All transformation variants
+            for transform in TRANSFORMATION_METHODS:
+                transformed = self.transformer.transform(base_query, transform)
+                attacks.append(self._create_record(
+                    base=base_query,
+                    category=category,
+                    transformed=transformed,
+                    attack_type="transformation",
+                    variant_type=transform
+                ))
+            
+            # 3. Single random combined variant (template + random transform)
+            if templates:
+                template = random.choice(templates)
+                transform = random.choice(TRANSFORMATION_METHODS)
+                combined = self.transformer.transform(
+                    template.format(query=base_query),
+                    transform
+                )
+                attacks.append(self._create_record(
+                    base=base_query,
+                    category=category,
+                    transformed=combined,
+                    attack_type="combined",
+                    variant_type=f"{template.split(':')[0].strip()}+{transform}"
+                ))
+    
+    return attacks
+
+    
     # def generate_attacks(self) -> list:
     # attacks = []
     # categories = list(self.test_cases.keys())
@@ -69,59 +119,59 @@ class AdversarialTester:
 
     # new generate_attacks function:
 
-    def generate_attacks(self) -> list:
-    attacks = []
-    # Include ALL template categories from templates.py
-    all_template_categories = list(ATTACK_TEMPLATES.keys())
-    categories_with_test_cases = list(self.test_cases.keys())
+    # def generate_attacks(self) -> list:
+    # attacks = []
+    # # Include ALL template categories from templates.py
+    # all_template_categories = list(ATTACK_TEMPLATES.keys())
+    # categories_with_test_cases = list(self.test_cases.keys())
     
-    # Prepare queries: use test cases where available, else empty list
-    unused_queries = {
-        category: random.sample(self.test_cases.get(category, []), len(self.test_cases.get(category, [])))
-        for category in all_template_categories
-    }
+    # # Prepare queries: use test cases where available, else empty list
+    # unused_queries = {
+    #     category: random.sample(self.test_cases.get(category, []), len(self.test_cases.get(category, [])))
+    #     for category in all_template_categories
+    # }
 
-    while len(attacks) < self.config['max_total_queries']:
-        for category in all_template_categories:
-            if not unused_queries[category]:
-                # For template-only categories, borrow a random base query
-                if category not in categories_with_test_cases:
-                    donor_category = random.choice(categories_with_test_cases)
-                    if self.test_cases[donor_category]:
-                        base_query = random.choice(self.test_cases[donor_category])
-                    else:
-                        continue
-                else:
-                    continue
-            else:
-                base_query = unused_queries[category].pop(0)
+    # while len(attacks) < self.config['max_total_queries']:
+    #     for category in all_template_categories:
+    #         if not unused_queries[category]:
+    #             # For template-only categories, borrow a random base query
+    #             if category not in categories_with_test_cases:
+    #                 donor_category = random.choice(categories_with_test_cases)
+    #                 if self.test_cases[donor_category]:
+    #                     base_query = random.choice(self.test_cases[donor_category])
+    #                 else:
+    #                     continue
+    #             else:
+    #                 continue
+    #         else:
+    #             base_query = unused_queries[category].pop(0)
             
-            # Force template attacks for template-only categories
-            variant_type = "template" if category not in categories_with_test_cases else random.choice(["template", "transformation", "combined"])
+    #         # Force template attacks for template-only categories
+    #         variant_type = "template" if category not in categories_with_test_cases else random.choice(["template", "transformation", "combined"])
             
-            if variant_type == "template":
-                template = random.choice(ATTACK_TEMPLATES.get(category, []))
-                transformed = template.format(query=base_query)
-                variant_details = template
-            elif variant_type == "transformation":
-                transform = random.choice(TRANSFORMATION_METHODS)
-                transformed = self.transformer.transform(base_query, transform)
-                variant_details = transform
-            else:
-                template = random.choice(ATTACK_TEMPLATES.get(category, []))
-                transform = random.choice(TRANSFORMATION_METHODS)
-                transformed = self.transformer.transform(template.format(query=base_query), transform)
-                variant_details = f"{template}+{transform}"
+    #         if variant_type == "template":
+    #             template = random.choice(ATTACK_TEMPLATES.get(category, []))
+    #             transformed = template.format(query=base_query)
+    #             variant_details = template
+    #         elif variant_type == "transformation":
+    #             transform = random.choice(TRANSFORMATION_METHODS)
+    #             transformed = self.transformer.transform(base_query, transform)
+    #             variant_details = transform
+    #         else:
+    #             template = random.choice(ATTACK_TEMPLATES.get(category, []))
+    #             transform = random.choice(TRANSFORMATION_METHODS)
+    #             transformed = self.transformer.transform(template.format(query=base_query), transform)
+    #             variant_details = f"{template}+{transform}"
             
-            attacks.append(self._create_record(
-                base_query, category, transformed, 
-                variant_type, variant_details
-            ))
+    #         attacks.append(self._create_record(
+    #             base_query, category, transformed, 
+    #             variant_type, variant_details
+    #         ))
             
-            if len(attacks) >= self.config['max_total_queries']:
-                break
+    #         if len(attacks) >= self.config['max_total_queries']:
+    #             break
     
-    return attacks[:self.config['max_total_queries']]
+    # return attacks[:self.config['max_total_queries']]
     
     # def _generate_variants(self, base_query: str, category: str) -> list:
     #     """Generate variants for a single base query"""
