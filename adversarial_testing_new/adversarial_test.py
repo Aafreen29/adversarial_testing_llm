@@ -32,52 +32,54 @@ class AdversarialTester:
 
 
     def generate_attacks(self) -> list:
-    attacks = []
+        """Generate all adversarial queries """
     
-    for category, base_queries in self.test_cases.items():
-        templates = ATTACK_TEMPLATES.get(category, [])
+        attacks = []
         
-        for base_query in base_queries:
-            # 1. Single random template variant
-            if templates:
-                template = random.choice(templates)
-                templated = template.format(query=base_query)
-                attacks.append(self._create_record(
-                    base=base_query,
-                    category=category,
-                    transformed=templated,
-                    attack_type="template",
-                    variant_type=template.split(":")[0].strip()
-                ))
+        for category, queries in self.test_cases.items():
+            # Randomly select exactly 8 base queries per category (with duplicates if needed)
+            base_queries = random.choices(queries, k=8) if queries else []
             
-            # 2. All transformation variants
-            for transform in TRANSFORMATION_METHODS:
-                transformed = self.transformer.transform(base_query, transform)
-                attacks.append(self._create_record(
-                    base=base_query,
-                    category=category,
-                    transformed=transformed,
-                    attack_type="transformation",
-                    variant_type=transform
-                ))
-            
-            # 3. Single random combined variant (template + random transform)
-            if templates:
-                template = random.choice(templates)
-                transform = random.choice(TRANSFORMATION_METHODS)
-                combined = self.transformer.transform(
-                    template.format(query=base_query),
-                    transform
-                )
-                attacks.append(self._create_record(
-                    base=base_query,
-                    category=category,
-                    transformed=combined,
-                    attack_type="combined",
-                    variant_type=f"{template.split(':')[0].strip()}+{transform}"
-                ))
-    
-    return attacks
+            for query in base_queries:
+                # Direct transformations (22 variants - unchanged)
+                for transform in TRANSFORMATION_METHODS:
+                    transformed = self.transformer.transform(query, transform)
+                    attacks.append(self._create_record(
+                        query, category, transformed,
+                        "direct_transform", transform
+                    ))
+                
+                # Template-only attacks (2 variants from own category - unchanged)
+                templates = ATTACK_TEMPLATES.get(category, [])
+                if templates:
+                    selected_templates = random.sample(
+                        templates * 2,  # Handle cases with <2 templates
+                        min(2, len(templates))
+                    )
+                    for template in selected_templates:
+                        templated = template.format(query=query)
+                        attacks.append(self._create_record(
+                            query, category, templated,
+                            "template_only", template
+                        ))
+                
+                # Combined attack (own category template + random transform - unchanged)
+                if templates:
+                    template = random.choice(templates)
+                    transform = random.choice(TRANSFORMATION_METHODS)
+                    combined = self.transformer.transform(
+                        template.format(query=query),
+                        transform
+                    )
+                    attacks.append(self._create_record(
+                        query, category, combined,
+                        "combined_attack", f"{template}+{transform}"
+                    ))
+                
+                if len(attacks) >= self.config['max_total_queries']:
+                    return attacks[:self.config['max_total_queries']]
+        
+        return attacks        
 
     
     # def generate_attacks(self) -> list:
