@@ -1,10 +1,19 @@
 Config.yaml
 
+# # Adversarial Testing Configuration
+# max_total_queries: 2000
+# max_queries_per_category: 100
+# variants_per_template: 3
+# variants_per_transformation: 2
+# variants_combined: 2
+# rate_limit: 0.2  # seconds between requests
+# output_file: "adversarial_test_results.xlsx"
+
 # Adversarial Testing Configuration
-max_total_queries: 2000
-max_queries_per_category: 100
-variants_per_template: 3
-variants_per_transformation: 2
-variants_combined: 2
-rate_limit: 0.2  # seconds between requests
-output_file: "adversarial_test_results.xlsx"
+min_total_queries: 3500
+max_total_queries: 4000
+max_base_queries_per_category: 8
+templates_per_query: 2
+combined_attack_template_source: "own_category"  # Restrict to query's category
+rate_limit: 0.2
+output_file: "adversarial_test_results_3600.xlsx"
